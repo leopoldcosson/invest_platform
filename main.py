@@ -179,7 +179,7 @@ if 'portfolio' in st.session_state:
 
         # Details
         with st.expander('Details'):
-            st.dataframe(st.session_state['portfolio'].portfolio, use_container_width=True)
+            st.dataframe(st.session_state['portfolio'].portfolio, use_container_width=True, hide_index=True)
 
     # Cumulative returns
     st.divider()
@@ -232,4 +232,4 @@ if 'portfolio' in st.session_state:
         st.plotly_chart(fig_opti, theme="streamlit", use_container_width=True)
         st.caption(f"Sharpe Ratio: {st.session_state['optimized_sharpe_ratio']}")
 
-        st.dataframe(st.session_state['optimized_portfolio'][['symbol', 'exchange', 'market_value']])
+        st.dataframe(st.session_state['optimized_portfolio'][['symbol', 'exchange', 'market_value']], hide_index=True)
