@@ -78,7 +78,7 @@ class Portfolio:
     def get_annualized_returns(self):
 
         # Get annualized average return over the YTD
-        return self.historical_data.fillna(0).dot(self.weights.T).mean()*m.sqrt(252)
+        return (1+self.historical_data.fillna(0).dot(self.weights.T)).prod()-1
 
     def get_indicators(self):
 

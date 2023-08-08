@@ -52,7 +52,7 @@ def optimisation_many_hikers(symbols_to_replace: list, symbols_to_keep: list):
 
     # Fourth step : We create random orders of asset
     random_orders = []
-    nb_order = 50
+    nb_order = st.session_state['nb_iteration']
     for i in range(nb_order):
         temp_list = list(possible_symbols)
         random.shuffle(temp_list)
@@ -73,17 +73,20 @@ def optimisation_many_hikers(symbols_to_replace: list, symbols_to_keep: list):
     for i in range(nb_order):
 
         # Progress bar
-        st.session_state['progress_bar'].progress(int(100/nb_order*i)+1, text=progress_text)
+        st.session_state['progress_bar'].progress(int(100/nb_order*(i+1)), text=progress_text)
 
         # For each random order, start from the initial portfolio
         portfolio.update_weights(initial_portfolio)
-        portfolios.append([portfolio.portfolio])
-        sharpe_ratios.append([portfolio.sharpe_ratio])
+        portfolios.append([])
+        sharpe_ratios.append([])
 
         # test symbol after symbol
         for symbol in random_orders[i]:
 
-            portfolio.update_weights(portfolios[i][argmax(sharpe_ratios[i])])  # Update the portfolio with the best composition so far
+            if len(sharpe_ratios[i]) > 0:
+                portfolio.update_weights(portfolios[i][argmax(sharpe_ratios[i])])  # Update the portfolio with the best composition so far
+            else:
+                portfolio.update_weights(initial_portfolio)
 
             # Test 5 weights with the amount of market_value still free to be allocated
             possible_values = np.linspace(0.0, initial_amount-portfolio.value, num=5)
@@ -94,7 +97,13 @@ def optimisation_many_hikers(symbols_to_replace: list, symbols_to_keep: list):
                 portfolios[i].append(portfolio.portfolio.copy())
                 sharpe_ratios[i].append(portfolio.sharpe_ratio)
 
-    # Sixth step : Keep only the best one
+    # 6th : We set to zero every sharpe ratio of portfolios having less than the minimum number of asset we want
+    for i in range(len(portfolios)):
+        for j in range(len(portfolios[i])):
+            if len(portfolios[i][j].loc[portfolios[i][j]['market_value'].astype(float) > 0, :]) < len(symbols_to_keep) + st.session_state['nb_wanted_assets']:
+                sharpe_ratios[i][j] = 0.0
+
+    # 7th step : Keep only the best one
     st.session_state['msg'] = st.toast('Find the best one...', icon="🥞")
     max_sharpe_ratio = np.amax(np.array(sharpe_ratios))
     max_coordinates = np.array(sharpe_ratios).argmax()
@@ -156,9 +165,10 @@ if 'portfolio' in st.session_state:
         # Metrics
         col1, col2, col3 = st.columns(3)
         col1.metric("Actual Value", '{:,}'.format(st.session_state['portfolio'].value) + ' $')
-        col2.metric("Annualized Volatility", str(st.session_state['portfolio'].volatility) + ' %')
+        col2.metric("Annualized Volatility", str(st.session_state['portfolio'].volatility*100) + ' %')
         col3.metric("Sharpe Ratio", str(np.round(st.session_state['portfolio'].sharpe_ratio, 3)))
         st.caption('Risk Free Rate at 2%')
+
         css = '''
                 [data-testid="metric-container"] {
                     width: fit-content;
@@ -203,7 +213,7 @@ if 'portfolio' in st.session_state:
         indicators_df = st.session_state['portfolio'].get_indicators()
         symbols_to_replace = list(indicators_df.T[indicators_df.T.iloc[:, 0] == 'Sell'].index)
         symbols_to_keep = list(indicators_df.T[indicators_df.T.iloc[:, 0] == 'Keep'].index)
-        st.dataframe(indicators_df.style.applymap(highlight_sell), use_container_width=True)
+        st.dataframe(indicators_df.style.applymap(highlight_sell))
 
     # Optimization
     st.divider()
@@ -213,23 +223,37 @@ if 'portfolio' in st.session_state:
         st.write('We advice you to sell these red highlighted stocks and to let us calculate what shares you should buy to optimize your sharpe ratio.')
         st.write('')
 
+        col1, col2 = st.columns(2)
+        st.session_state['nb_iteration'] = col1.number_input('Number of iteration:', min_value=1, value=10)
+        st.session_state['nb_wanted_assets'] = col2.number_input('How many asset minimum to replace the red ones ?', min_value=1, value=len(symbols_to_replace))
+
     if st.button('Start Optimization', use_container_width=True, type='secondary'):
 
         # Optimization process
         with st.spinner('Optimization in progress...'):
 
-            result_opti = optimisation_many_hikers(symbols_to_replace, symbols_to_keep)
+            try:
+                result_opti = optimisation_many_hikers(symbols_to_replace, symbols_to_keep)
+            except:
+                result_opti = 'error. Try again'
 
+        if result_opti != 'error. Try again':
             # Formatting results
             st.session_state['optimized_portfolio'] = pd.DataFrame(result_opti[0], columns=['symbol', 'exchange', 'qty', 'side', 'market_value'])
             st.session_state['optimized_portfolio'] = st.session_state['optimized_portfolio'].loc[st.session_state['optimized_portfolio']['market_value'].astype(float) > 0.0, :]
             st.session_state['optimized_sharpe_ratio'] = result_opti[1]
 
-        # Print results
-        st.subheader('Result:')
-        st.write('According to our portfolio optimizer based on the historic simulated sharpe ratio, you should reorganize your portfolio as followed:')
-        fig_opti = px.pie(st.session_state['optimized_portfolio'], values='market_value', names='symbol')
-        st.plotly_chart(fig_opti, theme="streamlit", use_container_width=True)
-        st.caption(f"Sharpe Ratio: {st.session_state['optimized_sharpe_ratio']}")
+            # Print results
+            st.subheader('Result:')
+            st.write('According to our portfolio optimizer based on the historic simulated sharpe ratio, you should reorganize your portfolio as followed:')
+            fig_opti = px.pie(st.session_state['optimized_portfolio'], values='market_value', names='symbol')
+            st.plotly_chart(fig_opti, theme="streamlit", use_container_width=True)
+            st.caption(f"Sharpe Ratio: {st.session_state['optimized_sharpe_ratio']}")
 
-        st.dataframe(st.session_state['optimized_portfolio'][['symbol', 'exchange', 'market_value']], hide_index=True)
+            st.dataframe(st.session_state['optimized_portfolio'][['symbol', 'exchange', 'market_value']], hide_index=True)
+
+        else:
+
+            st.write(result_opti)
+
+
