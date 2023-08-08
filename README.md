@@ -1,5 +1,6 @@
-# Investment Platform
+# Nara Investment
 
+Nara Investment Online : https://nara-investment-solution.streamlit.app/
 Nara Investment is a python solution working with streamlit to optimize your long term investment based on maximizing the sharpe ratio. It uses the data provider and broker Alpaca Market for now. (I'm looking for another data provider, so we can just upload an excel of a portfolio.)
 
 ### Alpaca Market
