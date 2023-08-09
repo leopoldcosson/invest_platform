@@ -6,3 +6,4 @@ requests~=2.31.0
 pandas~=1.5.3
 pillow~=9.4.0
 yfinance~=0.2.27
+openpyxl~=3.0.10

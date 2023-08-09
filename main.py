@@ -6,7 +6,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 import urllib3
-from PIL import Image
+import openpyxl
 
 from portfolio import *
 
