@@ -40,7 +40,7 @@ def optimisation_many_hikers(symbols_to_replace: list, symbols_to_keep: list):
             get_market_cap(possible_symbols, st.session_state['api_key'], st.session_state['api_secret_key'],
                            interval='12Month').T.sort_values(by='Market Cap', ascending=False).iloc[:100].index)
     else:
-        possible_symbols = list(pd.read_excel('./data/symbols.xlsx', header=0)['symbol'])
+        possible_symbols = list(pd.read_excel('data/symbols.xlsx', header=0)['symbol'])
 
     # Second step : we only keep symbols that have a good momentum. Let's create a false portfolio with all possibles assets and get indicators to know which one to keep
     false_portfolio = st.session_state['portfolio'].portfolio.copy()
@@ -163,7 +163,7 @@ with st.form(key='portfolioForm'):
     st.subheader('From Yahoo Finance')
     st.write('Load your portfolio from an excel file. Please respect the following format:')
 
-    image = Image.open('./data/excel_screenshot.png')
+    image = Image.open('data/excel_screenshot.png')
     col1, col2, col3 = st.columns(3)
     col2.image(image, caption='Excel Template')
 
