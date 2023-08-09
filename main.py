@@ -12,6 +12,15 @@ from portfolio import *
 
 urllib3.disable_warnings()
 
+list_possible_symbols = ['AAPL', 'MSFT', 'GOOG', 'AMZN', 'NVDA', 'META', 'BRK-B', 'TSLA', 'V', 'LLY', 'UNH', 'JPM',
+                         'JNJ', 'XOM', 'WMT', 'MA', 'PG', 'AVGO', 'HD', 'ORCL', 'CVX', 'MRK', 'ABBV', 'KO', 'PEP',
+                         'BAC', 'COST', 'ADBE', 'CSCO', 'TMO', 'MCD', 'CRM', 'PFE', 'NFLX', 'DHR', 'CMCSA', 'ABT',
+                         'AMD', 'NKE', 'TMUS', 'WFC', 'DIS', 'UPS', 'TXN', 'PM', 'MS', 'INTC', 'CAT', 'BA', 'INTU',
+                         'COP', 'UNP', 'AMGN', 'NEE', 'VZ', 'IBM', 'QCOM', 'LOW', 'BMY', 'DE', 'RTX', 'HON', 'AMAT',
+                         'SPGI', 'GE', 'AXP', 'SCHW', 'BKNG', 'GS', 'SBUX', 'PLD', 'LMT', 'NOW', 'ELV', 'SYK', 'ISRG',
+                         'BLK', 'ADP', 'T', 'MDLZ', 'GILD', 'TJX', 'CVS', 'ADI', 'MMC', 'LRCX', 'UBER', 'VRTX', 'ABNB',
+                         'ZTS', 'C', 'CI', 'AMT', 'REGN', 'SLB', 'BDX', 'MO', 'FI', 'ITW']
+
 
 def argmax(iterable) -> float:
     return max(enumerate(iterable), key=lambda x: x[1])[0]
@@ -40,7 +49,7 @@ def optimisation_many_hikers(symbols_to_replace: list, symbols_to_keep: list):
             get_market_cap(possible_symbols, st.session_state['api_key'], st.session_state['api_secret_key'],
                            interval='12Month').T.sort_values(by='Market Cap', ascending=False).iloc[:100].index)
     else:
-        possible_symbols = list(pd.read_excel('symbols.xlsx', header=0)['symbol'])
+        possible_symbols = list_possible_symbols.copy()
 
     # Second step : we only keep symbols that have a good momentum. Let's create a false portfolio with all possibles assets and get indicators to know which one to keep
     false_portfolio = st.session_state['portfolio'].portfolio.copy()
@@ -162,10 +171,10 @@ with st.form(key='portfolioForm'):
     # Load the Excel portfolio and format it as needed
     st.subheader('From Yahoo Finance')
     st.write('Load your portfolio from an excel file. Please respect the following format:')
-
-    image = Image.open('excel_screenshot.png')
+    example_data = pd.DataFrame(
+        [{'symbol': 'AAPL', 'market_value': 32.43}, {'symbol': 'AMZN', 'market_value': 2335.13}])
     col1, col2, col3 = st.columns(3)
-    col2.image(image, caption='Excel Template')
+    col2.dataframe(example_data)
 
     uploaded_file = st.file_uploader("Portfolio:", key='portfolioFile')
     if uploaded_file is not None:
