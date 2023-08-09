@@ -1,18 +1,23 @@
-import streamlit as st
 import random
+import numpy as np
 import time
+
 import plotly.express as px
 import plotly.graph_objects as go
-from portfolio import *
+import streamlit as st
 import urllib3
+from PIL import Image
+
+from portfolio import *
+
 urllib3.disable_warnings()
 
 
-def argmax(iterable)->float:
+def argmax(iterable) -> float:
     return max(enumerate(iterable), key=lambda x: x[1])[0]
 
 
-def highlight_sell(val)->str:
+def highlight_sell(val) -> str:
     color = 'green' if val == 'Keep' else 'red'
     return f'background-color: {color}'
 
@@ -26,13 +31,16 @@ def optimisation_many_hikers(symbols_to_replace: list, symbols_to_keep: list):
     :return: return the best portfolio and its sharpe ration
     """
 
-    # First step : Downloading the 100th most traded asset of the year on the NASDAQ
+    # First step : Downloading the 100th most traded asset of the year on the NASDAQ for the alpaca method or else load historical selection
     st.session_state['msg'] = st.toast('Downloading assets...', icon="🥞")
     time.sleep(1)
-    possible_symbols = get_symbols(st.session_state['api_key'], st.session_state['api_secret_key'])
-    possible_symbols = list(
-        get_market_cap(possible_symbols, st.session_state['api_key'], st.session_state['api_secret_key'],
-                       interval='12Month').T.sort_values(by='Market Cap', ascending=False).iloc[:100].index)
+    if st.session_state['api_key'] != '':
+        possible_symbols = get_symbols(st.session_state['api_key'], st.session_state['api_secret_key'])
+        possible_symbols = list(
+            get_market_cap(possible_symbols, st.session_state['api_key'], st.session_state['api_secret_key'],
+                           interval='12Month').T.sort_values(by='Market Cap', ascending=False).iloc[:100].index)
+    else:
+        possible_symbols = list(pd.read_excel('./data/symbols.xlsx', header=0)['symbol'])
 
     # Second step : we only keep symbols that have a good momentum. Let's create a false portfolio with all possibles assets and get indicators to know which one to keep
     false_portfolio = st.session_state['portfolio'].portfolio.copy()
@@ -40,9 +48,11 @@ def optimisation_many_hikers(symbols_to_replace: list, symbols_to_keep: list):
         if symbol not in list(false_portfolio.symbol.unique()):
             false_portfolio.loc[len(false_portfolio) + 1, :] = [symbol, 'NASDAQ', 0, 'long', 0.0]
 
-    false_portfolio = Portfolio(st.session_state['api_key'], st.session_state['api_secret_key'], false_portfolio)  # Build the fake portfolio dataframe
+    false_portfolio = Portfolio(st.session_state['api_key'], st.session_state['api_secret_key'],
+                                false_portfolio)  # Build the fake portfolio dataframe
     indicators_df = false_portfolio.get_indicators()
-    possible_symbols = list(indicators_df.T[indicators_df.T.iloc[:, 0] == 'Keep'].index)  # Keep only those with good momentum
+    possible_symbols = list(
+        indicators_df.T[indicators_df.T.iloc[:, 0] == 'Keep'].index)  # Keep only those with good momentum
     for elt in symbols_to_keep:
         if elt in possible_symbols:
             possible_symbols.remove(elt)
@@ -60,7 +70,8 @@ def optimisation_many_hikers(symbols_to_replace: list, symbols_to_keep: list):
 
     # Fifth step : we explore each random order to find the first maximum local before reaching the total initial market value
     st.session_state['msg'] = st.toast('Testing every asset...', icon="🥞")
-    initial_portfolio = false_portfolio.portfolio.loc[false_portfolio.portfolio['symbol'].isin(possible_symbols+symbols_to_keep), :].copy()
+    initial_portfolio = false_portfolio.portfolio.loc[
+                        false_portfolio.portfolio['symbol'].isin(possible_symbols + symbols_to_keep), :].copy()
     portfolio = Portfolio(st.session_state['api_key'], st.session_state['api_secret_key'], initial_portfolio)
     sharpe_ratios = []
     portfolios = []
@@ -73,7 +84,7 @@ def optimisation_many_hikers(symbols_to_replace: list, symbols_to_keep: list):
     for i in range(nb_order):
 
         # Progress bar
-        st.session_state['progress_bar'].progress(int(100/nb_order*(i+1)), text=progress_text)
+        st.session_state['progress_bar'].progress(int(100 / nb_order * (i + 1)), text=progress_text)
 
         # For each random order, start from the initial portfolio
         portfolio.update_weights(initial_portfolio)
@@ -84,12 +95,13 @@ def optimisation_many_hikers(symbols_to_replace: list, symbols_to_keep: list):
         for symbol in random_orders[i]:
 
             if len(sharpe_ratios[i]) > 0:
-                portfolio.update_weights(portfolios[i][argmax(sharpe_ratios[i])])  # Update the portfolio with the best composition so far
+                portfolio.update_weights(
+                    portfolios[i][argmax(sharpe_ratios[i])])  # Update the portfolio with the best composition so far
             else:
                 portfolio.update_weights(initial_portfolio)
 
             # Test 5 weights with the amount of market_value still free to be allocated
-            possible_values = np.linspace(0.0, initial_amount-portfolio.value, num=5)
+            possible_values = np.linspace(0.0, initial_amount - portfolio.value, num=5)
             for value in possible_values:
                 portfolio_df = portfolio.portfolio.copy()
                 portfolio_df.loc[portfolio_df['symbol'] == symbol, 'market_value'] = np.round(value, 2)
@@ -100,7 +112,8 @@ def optimisation_many_hikers(symbols_to_replace: list, symbols_to_keep: list):
     # 6th : We set to zero every sharpe ratio of portfolios having less than the minimum number of asset we want
     for i in range(len(portfolios)):
         for j in range(len(portfolios[i])):
-            if len(portfolios[i][j].loc[portfolios[i][j]['market_value'].astype(float) > 0, :]) < len(symbols_to_keep) + st.session_state['nb_wanted_assets']:
+            if len(portfolios[i][j].loc[portfolios[i][j]['market_value'].astype(float) > 0, :]) < len(symbols_to_keep) + \
+                    st.session_state['nb_wanted_assets']:
                 sharpe_ratios[i][j] = 0.0
 
     # 7th step : Keep only the best one
@@ -110,7 +123,7 @@ def optimisation_many_hikers(symbols_to_replace: list, symbols_to_keep: list):
     portfolios = np.array(portfolios)
 
     # Return the best portfolio and the max sharpe ratio of this portfolio
-    return portfolios[max_coordinates//portfolios.shape[1]][max_coordinates%portfolios.shape[1]], max_sharpe_ratio
+    return portfolios[max_coordinates // portfolios.shape[1]][max_coordinates % portfolios.shape[1]], max_sharpe_ratio
 
 
 # Page configuration
@@ -122,7 +135,7 @@ st.set_page_config(
 )
 
 # Introduction
-st.title('Investment platform')
+st.title('💰 Investment platform')
 st.divider()
 st.markdown(
     """
@@ -133,10 +146,11 @@ st.markdown(
 )
 st.divider()
 
-#Form to get the api_keys
-with st.form('api_keys'):
-    st.header('Api keys from Alpaca')
+# Form to get the api_keys
+with st.form(key='portfolioForm'):
+    st.header('Portfolio')
     st.write('')
+    st.subheader('From Alpaca Market:')
     col1, col2 = st.columns(2)
     st.session_state['api_key'] = col1.text_input(
         label='Api Key'
@@ -145,9 +159,42 @@ with st.form('api_keys'):
         label='Api Secret Key'
     )
 
+    # Load the Excel portfolio and format it as needed
+    st.subheader('From Yahoo Finance')
+    st.write('Load your portfolio from an excel file. Please respect the following format:')
+
+    image = Image.open('./data/excel_screenshot.png')
+    col1, col2, col3 = st.columns(3)
+    col2.image(image, caption='Excel Template')
+
+    uploaded_file = st.file_uploader("Portfolio:", key='portfolioFile')
+    if uploaded_file is not None:
+        st.session_state['dataframe'] = pd.read_excel(uploaded_file)
+        try:
+            st.session_state['dataframe']['qty'] = 0
+            st.session_state['dataframe']['side'] = 0
+            st.session_state['dataframe']['exchange'] = 0
+            st.session_state['dataframe'] = st.session_state['dataframe'][
+                ['symbol', 'exchange', 'qty', 'side', 'market_value']]
+        except:
+            st.write('Please, respect the format above.')
+    else:
+        st.session_state['dataframe'] = None
+
     # Create our Portfolio instance
-    if st.form_submit_button(label='Load Portfolio', use_container_width=True, type='primary'):
-        st.session_state['portfolio'] = Portfolio(st.session_state['api_key'], st.session_state['api_secret_key'])
+    col1, col2 = st.columns(2)
+    if col1.form_submit_button(label='Load Portfolio', use_container_width=True, type='primary'):
+        if st.session_state['dataframe'] is None:
+            st.session_state['portfolio'] = Portfolio(st.session_state['api_key'], st.session_state['api_secret_key'])
+        else:
+            st.session_state['portfolio'] = Portfolio(st.session_state['api_key'], st.session_state['api_secret_key'],
+                                                      st.session_state['dataframe'])
+
+    if col2.form_submit_button(label='Reset Portfolio', use_container_width=True):
+
+        for key in st.session_state.keys():
+            del st.session_state[key]
+        st.experimental_rerun()
 
 # If our portfolio is loaded
 if 'portfolio' in st.session_state:
@@ -164,8 +211,8 @@ if 'portfolio' in st.session_state:
 
         # Metrics
         col1, col2, col3 = st.columns(3)
-        col1.metric("Actual Value", '{:,}'.format(st.session_state['portfolio'].value) + ' $')
-        col2.metric("Annualized Volatility", str(st.session_state['portfolio'].volatility*100) + ' %')
+        col1.metric("Actual Value", '{:,}'.format(np.round(st.session_state['portfolio'].value, 2)) + ' $')
+        col2.metric("Annualized Volatility", str(np.round(st.session_state['portfolio'].volatility * 100, 2)) + ' %')
         col3.metric("Sharpe Ratio", str(np.round(st.session_state['portfolio'].sharpe_ratio, 3)))
         st.caption('Risk Free Rate at 2%')
 
@@ -220,40 +267,46 @@ if 'portfolio' in st.session_state:
     with st.container():
 
         st.header('Optimization:')
-        st.write('We advice you to sell these red highlighted stocks and to let us calculate what shares you should buy to optimize your sharpe ratio.')
+        st.write(
+            'We advice you to sell these red highlighted stocks and to let us calculate what shares you should buy to optimize your sharpe ratio.')
         st.write('')
 
         col1, col2 = st.columns(2)
         st.session_state['nb_iteration'] = col1.number_input('Number of iteration:', min_value=1, value=10)
-        st.session_state['nb_wanted_assets'] = col2.number_input('How many asset minimum to replace the red ones ?', min_value=1, value=len(symbols_to_replace))
+        st.session_state['nb_wanted_assets'] = col2.number_input('How many asset minimum to replace the red ones ?',
+                                                                 min_value=1, value=len(symbols_to_replace))
 
     if st.button('Start Optimization', use_container_width=True, type='secondary'):
 
         # Optimization process
         with st.spinner('Optimization in progress...'):
 
-            try:
-                result_opti = optimisation_many_hikers(symbols_to_replace, symbols_to_keep)
-            except:
-                result_opti = 'error. Try again'
+            # try:
+            result_opti = optimisation_many_hikers(symbols_to_replace, symbols_to_keep)
+            # except:
+            #     result_opti = 'error. Try again'
 
         if result_opti != 'error. Try again':
             # Formatting results
-            st.session_state['optimized_portfolio'] = pd.DataFrame(result_opti[0], columns=['symbol', 'exchange', 'qty', 'side', 'market_value'])
-            st.session_state['optimized_portfolio'] = st.session_state['optimized_portfolio'].loc[st.session_state['optimized_portfolio']['market_value'].astype(float) > 0.0, :]
+            st.session_state['optimized_portfolio'] = pd.DataFrame(result_opti[0],
+                                                                   columns=['symbol', 'exchange', 'qty', 'side',
+                                                                            'market_value'])
+            st.session_state['optimized_portfolio'] = st.session_state['optimized_portfolio'].loc[
+                                                      st.session_state['optimized_portfolio']['market_value'].astype(
+                                                          float) > 0.0, :]
             st.session_state['optimized_sharpe_ratio'] = result_opti[1]
 
             # Print results
             st.subheader('Result:')
-            st.write('According to our portfolio optimizer based on the historic simulated sharpe ratio, you should reorganize your portfolio as followed:')
+            st.write(
+                'According to our portfolio optimizer based on the historic simulated sharpe ratio, you should reorganize your portfolio as followed:')
             fig_opti = px.pie(st.session_state['optimized_portfolio'], values='market_value', names='symbol')
             st.plotly_chart(fig_opti, theme="streamlit", use_container_width=True)
             st.caption(f"Sharpe Ratio: {st.session_state['optimized_sharpe_ratio']}")
 
-            st.dataframe(st.session_state['optimized_portfolio'][['symbol', 'exchange', 'market_value']], hide_index=True)
+            st.dataframe(st.session_state['optimized_portfolio'][['symbol', 'exchange', 'market_value']],
+                         hide_index=True)
 
         else:
 
             st.write(result_opti)
-
-

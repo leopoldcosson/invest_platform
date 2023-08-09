@@ -1,11 +1,12 @@
 import json
-import requests
-import pandas as pd
-import numpy as np
 from datetime import datetime, timedelta
 
+import pandas as pd
+import requests
+import yfinance as yf
 
-def get_stocks_prices(symbols: list, api_key: str, api_secret_key: str, interval='1Day'):
+
+def get_stocks_prices_from_alpaca(symbols: list, api_key: str, api_secret_key: str, interval='1Day'):
     """
     Get historical prices
 
@@ -70,6 +71,7 @@ def get_market_cap(symbols: list, api_key: str, api_secret_key: str, interval='1
     :param interval: Interval => defined day per day but could be different to do intraday trading for instance
     :return: pd.DataFrame of symbol x market cap
     """
+
     def fetch(url, next_page_token=None):
 
         if next_page_token:
@@ -107,7 +109,7 @@ def get_market_cap(symbols: list, api_key: str, api_secret_key: str, interval='1
     return stocks
 
 
-def get_symbols(api_key: str, api_secret_key: str)->list:
+def get_symbols(api_key: str, api_secret_key: str) -> list:
     """
     Get all symbols available on alpaca
 
@@ -115,7 +117,6 @@ def get_symbols(api_key: str, api_secret_key: str)->list:
     :param api_secret_key:
     :return: list of symbols
     """
-
 
     url = "https://paper-api.alpaca.markets/v2/assets"
 
@@ -138,3 +139,8 @@ def get_symbols(api_key: str, api_secret_key: str)->list:
     symbols = list(data['symbol'].unique())
 
     return symbols
+
+
+def get_stocks_prices_from_yahoo(symbols):
+    portfolio_data = yf.download(' '.join(symbols), period="1y")['Close'].pct_change()
+    return portfolio_data
