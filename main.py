@@ -109,21 +109,25 @@ def optimisation_many_hikers(symbols_to_replace: list, symbols_to_keep: list):
             else:
                 portfolio.update_weights(initial_portfolio)
 
-            # Test 5 weights with the amount of market_value still free to be allocated
-            possible_values = np.linspace(0.0, initial_amount - portfolio.value, num=5)
-            for value in possible_values:
-                portfolio_df = portfolio.portfolio.copy()
-                portfolio_df.loc[portfolio_df['symbol'] == symbol, 'market_value'] = np.round(value, 2)
-                portfolio.update_weights(portfolio_df)
-                portfolios[i].append(portfolio.portfolio.copy())
-                sharpe_ratios[i].append(portfolio.sharpe_ratio)
+            # Test 10 weights with the amount of market_value still free to be allocated
+            possible_values = np.linspace(0, int(initial_amount - portfolio.value), num=10, dtype=int)
+            if len(possible_values) == 10:
+                for value in possible_values:
+                    portfolio_df = portfolio.portfolio.copy()
+                    portfolio_df.loc[portfolio_df['symbol'] == symbol, 'market_value'] = np.round(value, 2)
+                    portfolio.update_weights(portfolio_df)
+                    portfolios[i].append(portfolio.portfolio.copy())
+                    sharpe_ratios[i].append(portfolio.sharpe_ratio)
+            else:
+                portfolios[i].extend([portfolio.portfolio.copy()]*10)
+                sharpe_ratios[i].extend([portfolio.sharpe_ratio]*10)
 
     # 6th : We set to zero every sharpe ratio of portfolios having less than the minimum number of asset we want
     for i in range(len(portfolios)):
         for j in range(len(portfolios[i])):
             if len(portfolios[i][j].loc[portfolios[i][j]['market_value'].astype(float) > 0, :]) < len(symbols_to_keep) + \
                     st.session_state['nb_wanted_assets']:
-                sharpe_ratios[i][j] = 0.0
+                sharpe_ratios[i][j] = -10.0
 
     # 7th step : Keep only the best one
     st.session_state['msg'] = st.toast('Find the best one...', icon="🥞")
@@ -144,8 +148,8 @@ st.set_page_config(
 )
 
 # Introduction
-st.title('💰 Investment platform')
-st.divider()
+st.title('💰 Investment platform')  # Title
+st.divider()  # Grey horizontal bar
 st.markdown(
     """
     👋 This platform has been developed by Leopold Cosson. Feel free to modify it to suit your needs but don't claim it as your own please.
@@ -159,6 +163,8 @@ st.divider()
 with st.form(key='portfolioForm'):
     st.header('Portfolio')
     st.write('')
+
+    # Load the Alpaca Portfolio
     st.subheader('From Alpaca Market:')
     col1, col2 = st.columns(2)
     st.session_state['api_key'] = col1.text_input(
@@ -175,7 +181,6 @@ with st.form(key='portfolioForm'):
         [{'symbol': 'AAPL', 'market_value': 32.43}, {'symbol': 'AMZN', 'market_value': 2335.13}])
     col1, col2, col3 = st.columns(3)
     col2.dataframe(example_data)
-
     uploaded_file = st.file_uploader("Portfolio:", key='portfolioFile')
     if uploaded_file is not None:
         st.session_state['dataframe'] = pd.read_excel(uploaded_file)
@@ -199,8 +204,8 @@ with st.form(key='portfolioForm'):
             st.session_state['portfolio'] = Portfolio(st.session_state['api_key'], st.session_state['api_secret_key'],
                                                       st.session_state['dataframe'])
 
+    # Reset the portfolio
     if col2.form_submit_button(label='Reset Portfolio', use_container_width=True):
-
         for key in st.session_state.keys():
             del st.session_state[key]
         st.experimental_rerun()
@@ -281,7 +286,7 @@ if 'portfolio' in st.session_state:
         st.write('')
 
         col1, col2 = st.columns(2)
-        st.session_state['nb_iteration'] = col1.number_input('Number of iteration:', min_value=1, value=10)
+        st.session_state['nb_iteration'] = col1.number_input('Number of iteration:', min_value=1, value=100)
         st.session_state['nb_wanted_assets'] = col2.number_input('How many asset minimum to replace the red ones ?',
                                                                  min_value=1, value=len(symbols_to_replace))
 
